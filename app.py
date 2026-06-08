@@ -66,6 +66,12 @@ def sdm_main():
     return render_template('sdm_main.html')
 
 
+@app.route('/images/<path:filename>')
+def serve_images(filename):
+    from flask import send_from_directory
+    return send_from_directory('templates/images', filename)
+
+
 # pylint:  disable=too-many-branches
 def parse_parameters():
     arg_e = request.args.get('e')
@@ -178,6 +184,89 @@ def _internal_tagpt(force_json=False):
                            encryption_mode=res['encryption_mode'].name,
                            uid=res['uid'],
                            read_ctr_num=res['read_ctr'])
+
+
+@app.route('/tagpt2')
+def sdm_info_plain2():
+    """
+    Return HTML with animated Genuine plaque
+    """
+    return _internal_tagpt2()
+
+
+@app.route('/api/tagpt2')
+def sdm_api_info_plain2():
+    """
+    Return JSON
+    """
+    try:
+        return _internal_tagpt2(force_json=True)
+    except BadRequest as err:
+        return jsonify({"error": str(err)}), 400
+
+
+last_read_ctrs = {}
+
+def _internal_tagpt2(force_json=False):
+    is_valid = True
+    error_msg = ""
+    uid_hex = "UNKNOWN"
+    read_ctr_num = "UNKNOWN"
+    enc_mode = "UNKNOWN"
+
+    try:
+        if UID_PARAM not in request.args or CTR_PARAM not in request.args or SDMMAC_PARAM not in request.args:
+            raise ValueError("Missing parameters.")
+
+        uid_hex_raw = request.args[UID_PARAM]
+        uid = binascii.unhexlify(uid_hex_raw)
+        uid_hex = uid.hex().upper()
+        
+        read_ctr = binascii.unhexlify(request.args[CTR_PARAM])
+        cmac = binascii.unhexlify(request.args[SDMMAC_PARAM])
+
+        sdm_file_read_key = derive_tag_key(MASTER_KEY, uid, 2)
+        res = validate_plain_sun(uid=uid,
+                                 read_ctr=read_ctr,
+                                 sdmmac=cmac,
+                                 sdm_file_read_key=sdm_file_read_key)
+        
+        uid_hex = res['uid'].hex().upper()
+        read_ctr_num = res['read_ctr']
+        enc_mode = res['encryption_mode'].name
+
+        if uid_hex in last_read_ctrs:
+            if read_ctr_num <= last_read_ctrs[uid_hex]:
+                raise ValueError("Invalid read_ctr: must be strictly greater than the previously saved value.")
+        
+        last_read_ctrs[uid_hex] = read_ctr_num
+
+        if REQUIRE_LRP and res['encryption_mode'] != EncMode.LRP:
+            raise ValueError("Invalid encryption mode, expected LRP.")
+            
+    except Exception as e:
+        is_valid = False
+        error_msg = str(e)
+        if isinstance(e, InvalidMessage):
+            error_msg = "Invalid signature. Tag might be counterfeit."
+        elif isinstance(e, binascii.Error):
+            error_msg = "Malformed parameter format."
+
+    if request.args.get("output") == "json" or force_json:
+        if not is_valid:
+            raise BadRequest(error_msg)
+        return jsonify({
+            "uid": uid_hex,
+            "read_ctr": read_ctr_num,
+            "enc_mode": enc_mode
+        })
+
+    return render_template('tagpt2_genuine.html',
+                           is_valid=is_valid,
+                           error_msg=error_msg,
+                           encryption_mode=enc_mode,
+                           uid=uid_hex,
+                           read_ctr_num=read_ctr_num)
 
 
 @app.route('/webnfc')

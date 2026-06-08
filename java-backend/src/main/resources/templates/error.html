@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en" th:replace="~{_layout :: page(~{::content}, ~{::footer})}">
+    <body>
+        <div th:fragment="content">
+            <h1>Secure Dynamic Messaging Backend Server Demo</h1>
+            <div class="alert alert-danger" th:text="${msg}">
+                Error message placeholder
+            </div>
+            <hr>
+            <p>
+                <a href="/">Back to the main page</a>
+            </p>
+        </div>
+        <div th:fragment="footer">
+            <!-- Empty footer block for error page -->
+        </div>
+    </body>
+</html>

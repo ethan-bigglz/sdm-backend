@@ -1,0 +1,32 @@
+# Spring Boot & Gradle standard gitignore
+.gradle/
+build/
+out/
+bin/
+
+# Gradle wrapper (Must be committed)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Local Environment Variables
+.env
+.env.local
+.env.*
+!.env.example
+
+# IDEs and Tools
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Compiled Java class files
+*.class
+
+# Logs
+*.log
+
+# OS files
+.DS_Store

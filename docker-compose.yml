@@ -1,0 +1,10 @@
+services:
+  sdm-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sdm-backend:0.12
+    container_name: sdm-backend
+    ports:
+      - "5001:80"
+    restart: unless-stopped

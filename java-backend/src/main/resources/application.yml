@@ -1,0 +1,51 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: sdm-backend-java
+
+  threads:
+    virtual:
+      enabled: true # Enable high-performance Virtual Threads (Project Loom)
+
+#  config:
+#    import: optional:file:.env
+
+  thymeleaf:
+    cache: false
+    prefix: classpath:/templates/
+    suffix: .html
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.mariadb.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# Secure Dynamic Messaging (SDM) Configurations
+sdm:
+  # Used for derivation of per-tag keys
+  derive-mode: legacy # "legacy" or "standard"
+  master-key: "00000000000000000000000000000000"
+
+  # Parameter names for encrypted mirroring
+  enc-picc-data-param: picc_data
+  enc-file-data-param: enc
+
+  # Parameter names for plaintext mirroring
+  uid-param: uid
+  ctr-param: ctr
+
+  # Parameter name for signature (always applied)
+  sdmmac-param: cmac
+
+  # Accept only SDM using LRP, disallow usage of AES
+  require-lrp: false

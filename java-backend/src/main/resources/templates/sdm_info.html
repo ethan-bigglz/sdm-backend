@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" th:replace="~{_layout :: page(~{::content}, ~{})}" xmlns:th="http://www.thymeleaf.org">
+<body>
+    <div th:fragment="content">
+        <h1>Secure Dynamic Messaging Backend Server Demo</h1>
+        <p>
+            <strong style="color: green;">Cryptographic signature validated.</strong>
+        </p>
+        <p>
+            <th:block th:if="${encryption_mode == 'LRP'}">
+                <strong style="color: green;">Encryption mode: <span th:text="${encryption_mode}">LRP</span></strong><br>
+            </th:block>
+            <th:block th:unless="${encryption_mode == 'LRP'}">
+                Encryption mode: <span th:text="${encryption_mode}">AES</span><br>
+            </th:block>
+            
+            <th:block th:if="${picc_data_tag}">
+                PICC Data Tag: <code th:text="${picc_data_tag}">00</code><br>
+            </th:block>
+            
+            NFC TAG UID: <code th:text="${uid}">041E3C8A2D6B80</code><br>
+            Read counter: <code th:text="${read_ctr_num}">0</code><br>
+            
+            <th:block th:if="${file_data}">
+                File data (hex): <code th:text="${file_data}">0000</code><br>
+                File data (UTF-8): <code th:text="${file_data_utf8}">Hello</code><br>
+                <th:block th:if="${tt_status}">
+                    Tamper Status: <strong th:style="'color: ' + ${tt_color} + ';'" th:text="${tt_status}">UNKNOWN</strong><br>
+                    (Assuming that "Tamper Status" is stored in the first two bytes of "File data")
+                </th:block>
+            </th:block>
+        </p>
+        <p><a id="jsonLink" href="#" class="btn btn-outline-secondary">View as JSON</a></p>
+        <script>
+            document.getElementById("jsonLink").href = "/api" + window.location.pathname + window.location.search;
+        </script>
+        
+        <th:block th:if="${demo_mode}">
+            <hr>
+            <p>
+                <a th:href="@{/}">Back to the main page</a>
+            </p>
+        </th:block>
+    </div>
+</body>
+</html>

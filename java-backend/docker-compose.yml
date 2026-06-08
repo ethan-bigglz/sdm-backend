@@ -1,0 +1,24 @@
+services:
+  sdm-backend-java:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sdm-backend-java:0.0.1
+    container_name: sdm-backend-java
+    ports:
+      - "8080:8080"
+    networks:
+      - bigglz-nfc-network
+    restart: unless-stopped
+    environment:
+      # Use G1GC garbage collection optimized for low-latency/container environments
+      - JAVA_TOOL_OPTIONS=-XX:+UseG1GC
+      # Spring active profile (e.g. prod, dev)
+      - SPRING_PROFILES_ACTIVE=prod
+    env_file:
+      - .env
+
+
+networks:
+  bigglz-nfc-network:
+    external: true
