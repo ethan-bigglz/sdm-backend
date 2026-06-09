@@ -34,6 +34,7 @@ class SdmCounterServiceTest {
     void verifyAndLog_Success_WhenFirstTime() {
         // Given
         String uid = "04A1B2C3D4E5F6";
+        nfcItemMappingRepository.save(new NfcItemMapping(uid, "ITEM100"));
         int readCtr = 1;
 
         // When
@@ -53,6 +54,7 @@ class SdmCounterServiceTest {
     void verifyAndLog_Success_WhenCounterIsGreater() {
         // Given
         String uid = "04A1B2C3D4E5F6";
+        nfcItemMappingRepository.save(new NfcItemMapping(uid, "ITEM100"));
         String status1 = sdmCounterService.verifyAndLog(uid, 5); // 첫 번째 태깅 (ctr=5)
 
         // When
@@ -75,19 +77,20 @@ class SdmCounterServiceTest {
     void verifyAndLog_ThrowsException_WhenCounterIsLessOrEqual() {
         // Given
         String uid = "04A1B2C3D4E5F6";
+        nfcItemMappingRepository.save(new NfcItemMapping(uid, "ITEM100"));
         sdmCounterService.verifyAndLog(uid, 10); // 첫 번째 태깅 (ctr=10)
 
         // When & Then: 동일한 카운터로 태깅 시 예외 발생해야 함
         IllegalArgumentException sameException = assertThrows(IllegalArgumentException.class, () -> {
             sdmCounterService.verifyAndLog(uid, 10);
         });
-        assertEquals("Invalid read_ctr: must be strictly greater than the previously saved value.", sameException.getMessage());
+        assertEquals("Invalid read_ctr: 이전에 검증된 카운트 값보다 커야합니다.", sameException.getMessage());
 
         // When & Then: 더 작은 카운터로 태깅 시 예외 발생해야 함
         IllegalArgumentException smallerException = assertThrows(IllegalArgumentException.class, () -> {
             sdmCounterService.verifyAndLog(uid, 9);
         });
-        assertEquals("Invalid read_ctr: must be strictly greater than the previously saved value.", smallerException.getMessage());
+        assertEquals("Invalid read_ctr: 이전에 검증된 카운트 값보다 커야합니다.", smallerException.getMessage());
     }
 
     @Test

@@ -59,8 +59,20 @@ public class SdmCounterService {
      */
     @Transactional
     public String verifyAndLog(String uid, int readCtr) {
-        // Fetch the latest log for this UID with a pessimistic write lock
-        Optional<TagReadLog> latestLogOpt = tagReadLogRepository.findFirstByUidOrderByReadCtrDesc(uid);
+        if (uid == null) {
+            throw new IllegalArgumentException("UID must not be null.");
+        }
+
+        String normalizedUid = uid.trim().toUpperCase();
+
+        // 1. Lock the NfcItemMapping row to serialize validation requests for this UID
+        Optional<NfcItemMapping> mappingOpt = nfcItemMappingRepository.findByUidForUpdate(normalizedUid);
+        if (mappingOpt.isEmpty()) {
+            throw new TagNotRegisteredException("등록되지 않은 태그(UID)입니다.");
+        }
+
+        // 2. Fetch the latest log for this UID (already synchronized via the mapping lock)
+        Optional<TagReadLog> latestLogOpt = tagReadLogRepository.findFirstByUidOrderByReadCtrDesc(normalizedUid);
 
         boolean isFirst = true;
         if (latestLogOpt.isPresent()) {
@@ -71,8 +83,8 @@ public class SdmCounterService {
             }
         }
 
-        // Save the new read log
-        TagReadLog newLog = new TagReadLog(uid, readCtr);
+        // Save the new read log using the normalized UID
+        TagReadLog newLog = new TagReadLog(normalizedUid, readCtr);
         tagReadLogRepository.save(newLog);
 
         return isFirst ? "FIRST_VALIDATION" : "SUCCESS";
