@@ -153,7 +153,7 @@ public class SdmApiController {
     @GetMapping("/tag2")
     public ResponseEntity<?> tag2Api(
             @Parameter(description = "NFC 태그 고유 식별자 (Hex 문자열)", required = true) @RequestParam(required = false) String uid,
-            @Parameter(description = "연동할 아이템 코드 (상품 식별자 등)", required = true) @RequestParam(required = false) String item_cd,
+            @Parameter(description = "연동할 아이템 코드 (상품 식별자 등)", required = true) @RequestParam(required = false) String token_id,
             @Parameter(description = "NFC 읽기 횟수 카운터 (Integer)", required = true) @RequestParam(required = false) String ctr,
             @Parameter(description = "암호화 서명 값 (Hex 문자열)", required = true) @RequestParam(required = false) String cmac) {
         
@@ -162,10 +162,10 @@ public class SdmApiController {
         String encMode = "UNKNOWN";
         
         try {
-            if (uid == null || item_cd == null || ctr == null || cmac == null) {
+            if (uid == null || token_id == null || ctr == null || cmac == null) {
                 return ResponseEntity.badRequest().body(Map.of(
                     "status", "FAILURE",
-                    "message", "필수 파라미터가 누락되었습니다. (uid, item_cd, ctr, cmac 필요)",
+                    "message", "필수 파라미터가 누락되었습니다. (uid, token_id, ctr, cmac 필요)",
                     "uid", uidHex,
                     "read_ctr", readCtrNum,
                     "enc_mode", encMode
@@ -174,7 +174,7 @@ public class SdmApiController {
             
             // 1. nfc_item_mapping validation check
             try {
-                sdmCounterService.verifyTagAndItemMapping(uid, item_cd);
+                sdmCounterService.verifyTagAndItemMapping(uid, token_id);
             } catch (TagNotRegisteredException e) {
                 return ResponseEntity.badRequest().body(Map.of(
                     "status", "FAILURE",

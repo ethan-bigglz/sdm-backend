@@ -24,6 +24,38 @@ public class SdmService {
         this.properties = properties;
     }
 
+    public SdmResult validatePlainSunWithKey(byte[] uid, byte[] readCtr, byte[] sdmmac, byte[] nfcKey) {
+        try {
+            byte[] readCtrReversed = readCtr.clone();
+            reverseArray(readCtrReversed);
+
+            byte[] piccData = new byte[uid.length + readCtrReversed.length];
+            System.arraycopy(uid, 0, piccData, 0, uid.length);
+            System.arraycopy(readCtrReversed, 0, piccData, uid.length, readCtrReversed.length);
+
+            byte[] calculatedMac = calculateSdmmac(false, nfcKey, piccData, null, "AES");
+
+            if (!Arrays.equals(sdmmac, calculatedMac)) {
+                return SdmResult.failure("Invalid signature. Tag might be counterfeit.");
+            }
+
+            int ctrValue = unpackBigEndian3Bytes(readCtr);
+
+            return SdmResult.success(
+                bytesToHex(uid).toUpperCase(),
+                ctrValue,
+                "AES",
+                null,
+                null,
+                "",
+                "",
+                null
+            );
+        } catch (Exception e) {
+            return SdmResult.failure(e.getMessage());
+        }
+    }
+
     public SdmResult validatePlainSun(byte[] uid, byte[] readCtr, byte[] sdmmac) {
         try {
             if (properties.requireLrp()) {

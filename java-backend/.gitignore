@@ -30,3 +30,7 @@ bin/
 
 # OS files
 .DS_Store
+
+# test file
+uploads
+bruno

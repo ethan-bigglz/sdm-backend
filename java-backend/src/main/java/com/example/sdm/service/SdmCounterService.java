@@ -1,11 +1,9 @@
 package com.example.sdm.service;
 
-import com.example.sdm.entity.NfcItemMapping;
-import com.example.sdm.entity.TagReadLog;
+import com.example.sdm.entity.Item;
 import com.example.sdm.exception.ItemCodeMismatchException;
 import com.example.sdm.exception.TagNotRegisteredException;
-import com.example.sdm.repository.NfcItemMappingRepository;
-import com.example.sdm.repository.TagReadLogRepository;
+import com.example.sdm.repository.ItemRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,48 +12,44 @@ import java.util.Optional;
 @Service
 public class SdmCounterService {
 
-    private final TagReadLogRepository tagReadLogRepository;
-    private final NfcItemMappingRepository nfcItemMappingRepository;
+    private final ItemRepository itemRepository;
 
-    public SdmCounterService(TagReadLogRepository tagReadLogRepository, NfcItemMappingRepository nfcItemMappingRepository) {
-        this.tagReadLogRepository = tagReadLogRepository;
-        this.nfcItemMappingRepository = nfcItemMappingRepository;
+    public SdmCounterService(ItemRepository itemRepository) {
+        this.itemRepository = itemRepository;
     }
 
     /**
-     * Verifies that the tag UID is registered and matches the provided item code.
-     * 
-     * @param uid    the NFC tag UID in hex format
-     * @param itemCd the item code to check
-     * @throws TagNotRegisteredException if the UID is not found in nfc_item_mapping
-     * @throws ItemCodeMismatchException if the UID is found but matches a different item code
+     * Verifies that the tag UID is registered and matches the provided token ID.
      */
     @Transactional(readOnly = true)
-    public void verifyTagAndItemMapping(String uid, String itemCd) {
-        if (uid == null || itemCd == null) {
-            throw new IllegalArgumentException("UID and Item Code must not be null.");
+    public void verifyTagAndItemMapping(String uid, String tokenIdStr) {
+        if (uid == null || tokenIdStr == null) {
+            throw new IllegalArgumentException("UID and Token ID must not be null.");
         }
         
         String normalizedUid = uid.trim().toUpperCase();
-        Optional<NfcItemMapping> mappingOpt = nfcItemMappingRepository.findByUid(normalizedUid);
+        Optional<Item> itemOpt = itemRepository.findByNfcUid(normalizedUid);
         
-        if (mappingOpt.isEmpty()) {
+        if (itemOpt.isEmpty()) {
             throw new TagNotRegisteredException("등록되지 않은 태그(UID)입니다.");
         }
         
-        NfcItemMapping mapping = mappingOpt.get();
-        if (!mapping.getItemCd().trim().equalsIgnoreCase(itemCd.trim())) {
-            throw new ItemCodeMismatchException("등록된 태그의 아이템 코드와 일치하지 않습니다.");
+        Item item = itemOpt.get();
+        
+        int tokenId;
+        try {
+            tokenId = Integer.parseInt(tokenIdStr);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid Token ID format: " + tokenIdStr);
+        }
+
+        if (item.getNftTokenId() != tokenId) {
+            throw new ItemCodeMismatchException("등록된 태그의 토큰 ID와 일치하지 않습니다.");
         }
     }
 
     /**
      * Verifies the read counter against the database history and logs the tagging attempt.
-     * Uses a pessimistic write lock to handle concurrent requests for the same UID safely.
-     *
-     * @param uid     the NFC tag UID in hex format
-     * @param readCtr the read counter from the NFC tag
-     * @throws IllegalArgumentException if the counter is not strictly greater than the previously saved value
      */
     @Transactional
     public String verifyAndLog(String uid, int readCtr) {
@@ -65,27 +59,16 @@ public class SdmCounterService {
 
         String normalizedUid = uid.trim().toUpperCase();
 
-        // 1. Lock the NfcItemMapping row to serialize validation requests for this UID
-        Optional<NfcItemMapping> mappingOpt = nfcItemMappingRepository.findByUidForUpdate(normalizedUid);
-        if (mappingOpt.isEmpty()) {
-            throw new TagNotRegisteredException("등록되지 않은 태그(UID)입니다.");
+        Item item = itemRepository.findByNfcUid(normalizedUid)
+                .orElseThrow(() -> new TagNotRegisteredException("등록되지 않은 태그(UID)입니다."));
+
+        boolean isFirst = (item.getLastCtr() == 0);
+        if (readCtr <= item.getLastCtr()) {
+            throw new IllegalArgumentException("Invalid read_ctr: 이전에 검증된 카운트 값보다 커야합니다.");
         }
 
-        // 2. Fetch the latest log for this UID (already synchronized via the mapping lock)
-        Optional<TagReadLog> latestLogOpt = tagReadLogRepository.findFirstByUidOrderByReadCtrDesc(normalizedUid);
-
-        boolean isFirst = true;
-        if (latestLogOpt.isPresent()) {
-            isFirst = false;
-            TagReadLog latestLog = latestLogOpt.get();
-            if (readCtr <= latestLog.getReadCtr()) {
-                throw new IllegalArgumentException("Invalid read_ctr: 이전에 검증된 카운트 값보다 커야합니다.");
-            }
-        }
-
-        // Save the new read log using the normalized UID
-        TagReadLog newLog = new TagReadLog(normalizedUid, readCtr);
-        tagReadLogRepository.save(newLog);
+        item.setLastCtr(readCtr);
+        itemRepository.save(item);
 
         return isFirst ? "FIRST_VALIDATION" : "SUCCESS";
     }

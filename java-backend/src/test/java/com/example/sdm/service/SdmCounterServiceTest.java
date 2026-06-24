@@ -1,11 +1,14 @@
 package com.example.sdm.service;
 
-import com.example.sdm.entity.NfcItemMapping;
-import com.example.sdm.entity.TagReadLog;
+import com.example.sdm.entity.Brand;
+import com.example.sdm.entity.Product;
+import com.example.sdm.entity.Item;
 import com.example.sdm.exception.ItemCodeMismatchException;
 import com.example.sdm.exception.TagNotRegisteredException;
-import com.example.sdm.repository.NfcItemMappingRepository;
-import com.example.sdm.repository.TagReadLogRepository;
+import com.example.sdm.repository.BrandRepository;
+import com.example.sdm.repository.ProductRepository;
+import com.example.sdm.repository.ItemRepository;
+import com.example.sdm.entity.ProductTier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,17 +27,27 @@ class SdmCounterServiceTest {
     private SdmCounterService sdmCounterService;
 
     @Autowired
-    private TagReadLogRepository tagReadLogRepository;
+    private BrandRepository brandRepository;
 
     @Autowired
-    private NfcItemMappingRepository nfcItemMappingRepository;
+    private ProductRepository productRepository;
+
+    @Autowired
+    private ItemRepository itemRepository;
+
+    private Item createAndSaveItem(String uid, int tokenId) {
+        Brand brand = brandRepository.save(new Brand("BRAND_01", "#6B46FF", "Brand A", "브랜드 A", "Desc", "logo.png", "cover.png"));
+        Product product = productRepository.save(new Product("PROD_01", brand, ProductTier.EXCLUSIVE, "Product A", "상품 A", 100, null, true, "image.png"));
+        Item item = new Item(product, uid, tokenId, null, "unclaimed");
+        return itemRepository.save(item);
+    }
 
     @Test
     @DisplayName("최초 태깅 시 카운터 검증 및 로그 저장 성공")
     void verifyAndLog_Success_WhenFirstTime() {
         // Given
         String uid = "04A1B2C3D4E5F6";
-        nfcItemMappingRepository.save(new NfcItemMapping(uid, "ITEM100"));
+        createAndSaveItem(uid, 100);
         int readCtr = 1;
 
         // When
@@ -42,11 +55,9 @@ class SdmCounterServiceTest {
 
         // Then
         assertEquals("FIRST_VALIDATION", status);
-        Optional<TagReadLog> latestLog = tagReadLogRepository.findFirstByUidOrderByReadCtrDesc(uid);
-        assertTrue(latestLog.isPresent());
-        assertEquals(readCtr, latestLog.get().getReadCtr());
-        assertEquals(uid, latestLog.get().getUid());
-        assertNotNull(latestLog.get().getCreatedAt());
+        Optional<Item> itemOpt = itemRepository.findByNfcUid(uid);
+        assertTrue(itemOpt.isPresent());
+        assertEquals(readCtr, itemOpt.get().getLastCtr());
     }
 
     @Test
@@ -54,7 +65,7 @@ class SdmCounterServiceTest {
     void verifyAndLog_Success_WhenCounterIsGreater() {
         // Given
         String uid = "04A1B2C3D4E5F6";
-        nfcItemMappingRepository.save(new NfcItemMapping(uid, "ITEM100"));
+        createAndSaveItem(uid, 100);
         String status1 = sdmCounterService.verifyAndLog(uid, 5); // 첫 번째 태깅 (ctr=5)
 
         // When
@@ -63,13 +74,9 @@ class SdmCounterServiceTest {
         // Then
         assertEquals("FIRST_VALIDATION", status1);
         assertEquals("SUCCESS", status2);
-        Optional<TagReadLog> latestLog = tagReadLogRepository.findFirstByUidOrderByReadCtrDesc(uid);
-        assertTrue(latestLog.isPresent());
-        assertEquals(10, latestLog.get().getReadCtr());
-
-        // 전체 로그 카운트 검증 (이력이 누적되므로 총 2개의 로그가 있어야 함)
-        long logCount = tagReadLogRepository.count();
-        assertEquals(2, logCount);
+        Optional<Item> itemOpt = itemRepository.findByNfcUid(uid);
+        assertTrue(itemOpt.isPresent());
+        assertEquals(10, itemOpt.get().getLastCtr());
     }
 
     @Test
@@ -77,7 +84,7 @@ class SdmCounterServiceTest {
     void verifyAndLog_ThrowsException_WhenCounterIsLessOrEqual() {
         // Given
         String uid = "04A1B2C3D4E5F6";
-        nfcItemMappingRepository.save(new NfcItemMapping(uid, "ITEM100"));
+        createAndSaveItem(uid, 100);
         sdmCounterService.verifyAndLog(uid, 10); // 첫 번째 태깅 (ctr=10)
 
         // When & Then: 동일한 카운터로 태깅 시 예외 발생해야 함
@@ -98,12 +105,12 @@ class SdmCounterServiceTest {
     void verifyTagAndItemMapping_Success() {
         // Given
         String uid = "04A1B2C3D4E5F6";
-        String itemCd = "ITEM100";
-        nfcItemMappingRepository.save(new NfcItemMapping(uid, itemCd));
+        int tokenId = 100;
+        createAndSaveItem(uid, tokenId);
 
         // When & Then
         assertDoesNotThrow(() -> {
-            sdmCounterService.verifyTagAndItemMapping(uid, itemCd);
+            sdmCounterService.verifyTagAndItemMapping(uid, String.valueOf(tokenId));
         });
     }
 
@@ -112,11 +119,11 @@ class SdmCounterServiceTest {
     void verifyTagAndItemMapping_ThrowsTagNotRegisteredException() {
         // Given
         String uid = "UNREGISTERED_UID";
-        String itemCd = "ITEM100";
+        String tokenIdStr = "100";
 
         // When & Then
         TagNotRegisteredException ex = assertThrows(TagNotRegisteredException.class, () -> {
-            sdmCounterService.verifyTagAndItemMapping(uid, itemCd);
+            sdmCounterService.verifyTagAndItemMapping(uid, tokenIdStr);
         });
         assertEquals("등록되지 않은 태그(UID)입니다.", ex.getMessage());
     }
@@ -126,14 +133,14 @@ class SdmCounterServiceTest {
     void verifyTagAndItemMapping_ThrowsItemCodeMismatchException() {
         // Given
         String uid = "04A1B2C3D4E5F6";
-        String registeredItemCd = "ITEM100";
-        String requestedItemCd = "ITEM999";
-        nfcItemMappingRepository.save(new NfcItemMapping(uid, registeredItemCd));
+        int registeredTokenId = 100;
+        String requestedTokenIdStr = "999";
+        createAndSaveItem(uid, registeredTokenId);
 
         // When & Then
         ItemCodeMismatchException ex = assertThrows(ItemCodeMismatchException.class, () -> {
-            sdmCounterService.verifyTagAndItemMapping(uid, requestedItemCd);
+            sdmCounterService.verifyTagAndItemMapping(uid, requestedTokenIdStr);
         });
-        assertEquals("등록된 태그의 아이템 코드와 일치하지 않습니다.", ex.getMessage());
+        assertEquals("등록된 태그의 토큰 ID와 일치하지 않습니다.", ex.getMessage());
     }
 }
